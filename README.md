@@ -3,9 +3,9 @@
 
 ## Project Developer Information
 
-**Name:** 
-**Roll:** 2007020  
-**Section:** B  
+**Name:** Shoumik Barman Polok
+**Roll:** 2007004 
+**Section:** B
 **Year:** 4th  
 **Term:** 2nd  
 
@@ -26,33 +26,40 @@ The object detection example provides a real-world use case, but the techniques 
 
 ## IPC Workflow
 
-The communication pattern follows a producer-consumer model:
+he communication pattern follows a producer–consumer model:
 
-1. **Producer (C program)**: The C program (`ipc_yolov4.c`) creates a shared memory segment, performs object detection, and writes structured detection data to shared memory
-2. **Shared Memory**: A named memory segment (`/ipc_yolov4_shm`) that persists in the system, accessible by name
-3. **Consumer (Python program)**: The Python program (`py_out.py`) opens the same shared memory segment, reads the data using compatible structure definitions, and processes it
+Producer (C Program)
+The C program (ipc_dog_yolov4.c) performs dog detection using YOLOv4-tiny, creates a POSIX shared memory segment, and writes structured detection data (class ID, confidence score, and bounding box coordinates) into shared memory.
 
-This demonstrates a key IPC principle: processes don't need to run simultaneously - the shared memory segment persists until explicitly removed, allowing asynchronous communication.
+Shared Memory
+A named POSIX shared memory segment (/ipc_dog_shm) is used as the communication medium.
+This shared memory persists independently of process execution and can be accessed by any process that knows its name.
+
+Consumer (Python Program)
+The Python program (ipc_dog_reader.py) opens the same shared memory segment, reads the detection data using compatible structure definitions (ctypes), and visualizes the results by drawing bounding boxes on the input image.
+
+This workflow demonstrates a key IPC principle: the producer and consumer do not need to run simultaneously.
+The shared memory segment allows asynchronous communication, enabling independent execution of the C detection process and the Python visualization process.
 
 ## Project Structure
 
 ```
-ipc_c_py/
-├── ipc_yolov4.c      # C program that performs object detection
-├── py_out.py         # Python program that visualizes the results
-├── person.jpg        # Input image for testing
-└── ipc_py_out.jpg    # Output image with bounding boxes drawn
+ipc-dog-detection/
+├── ipc_dog_yolov4.c        # C program (YOLOv4-tiny detection + shared memory writer)
+├── ipc_dog_reader.py      # Python program (shared memory reader + visualization)
+├── dog.jpg                # Input image for detection
+└── ipc_dog_out.jpg        # Output image with bounding box drawn
 ```
 
 ## Example Results
 
 Here's what the input image looks like:
 
-![Input Image](person.jpg)
+![Input Image](dog.jpg)
 
 And here's the output after detection and visualization:
 
-![Output Image](ipc_py_out.jpg)
+![Output Image](ipc_dog_out.jpg)
 
 The green boxes show detected objects with their confidence scores.
 
@@ -60,11 +67,12 @@ The green boxes show detected objects with their confidence scores.
 
 ### For the C Program
 
-- A C compiler (gcc recommended)
-- Darknet library (for YOLOv4-tiny)
-- YOLOv4-tiny configuration file (`yolov4-tiny.cfg`)
-- YOLOv4-tiny weights file (`yolov4-tiny.weights`)
-- POSIX shared memory support (available on Linux and macOS)
+- C compiler (gcc recommended)
+- Darknet library compiled as a shared library (for YOLOv4-tiny)
+- YOLOv4-tiny configuration file (yolov4-tiny.cfg)
+- YOLOv4-tiny weights file (yolov4-tiny.weights)
+- COCO class names file (coco.names)
+- POSIX shared memory support (available on Linux, WSL, and macOS)
 
 ### For the Python Program
 
@@ -106,17 +114,18 @@ ls | grep libdarknet.so
 ## Step 2: Compile the C IPC Program
 
 ```bash
-gcc  ipc_yolov4.c -o ipc_yolov4 \
+gcc ipc_dog_yolov4.c -o ipc_dog_yolov4 \
     -Iinclude \
     -L. -ldarknet \
     -lm -pthread
+
 ```
 
 ## Step 3: Run the C Program (Producer)
 
 ```bash
 export LD_LIBRARY_PATH=.
-./ipc_yolov4 person.jpg
+./ipc_yolov4 dog.jpg
 ```
 
 Expected output:
@@ -128,20 +137,20 @@ Detections written to shared memory. Count = X
 ## Step 4: Run the Python Program (Consumer)
 
 ```bash
-python3 py_out.py
+python3 ipc_dog_reader.py
 ```
 
 The output image will be saved as:
 
 ```text
-ipc_py_out.jpg
+ipc_dog_out.jpg
 ```
 
 
 ### Shared Memory Mechanism
 
 This project uses POSIX shared memory, which provides:
-- **Named segments**: Memory accessible by a filesystem-like name (`/ipc_yolov4_shm`)
+- **Named segments**: Memory accessible by a filesystem-like name (`/ipc_dog_shm`)
 - **Persistence**: Memory remains available even after the creating process exits
 - **Zero-copy efficiency**: Data is accessed directly from memory without serialization overhead
 - **Cross-process access**: Multiple processes can map the same segment into their address spaces
@@ -162,7 +171,7 @@ For IPC to work correctly, both programs must use identical data structures. Thi
 
 ### C Program IPC Implementation
 
-The C program (`ipc_yolov4.c`) demonstrates the producer side of IPC:
+The C program (`ipc_dog_yolov4.c`) demonstrates the producer side of IPC:
 
 **Shared Memory Creation:**
 - `shm_open(SHM_NAME, O_CREAT | O_RDWR, 0666)`: Creates or opens a named shared memory object
@@ -175,13 +184,13 @@ The C program (`ipc_yolov4.c`) demonstrates the producer side of IPC:
 - The shared memory segment persists after the program exits (until explicitly unlinked)
 
 **IPC Key Points:**
-- The segment name (`/ipc_yolov4_shm`) must match exactly in both programs
+- The segment name (`/ipc_dog_shm`) must match exactly in both programs
 - Memory is zero-initialized before writing to ensure clean state
 - The producer doesn't need to wait for the consumer - data is available asynchronously
 
 ### Python Program IPC Implementation
 
-The Python program (`py_out.py`) demonstrates the consumer side of IPC:
+The Python program (`ipc_dog_reader.py`) demonstrates the consumer side of IPC:
 
 **Shared Memory Access:**
 - Opens the shared memory file from `/dev/shm` (Linux) where POSIX shared memory objects appear
@@ -212,12 +221,16 @@ You can modify these thresholds in `ipc_yolov4.c` at lines 102-103 to detect oth
 
 ### Detecting Other Object Classes
 
-To detect objects other than people, modify the condition in `ipc_yolov4.c`:
+To detect objects other than people, modify the condition in `ipc_dog_yolov4.c`:
 
 ```c
-// Change j==0 to detect other classes
-// j==0 is person, j==1 is bicycle, j==2 is car, etc.
-if (j==0 && dets[i].prob[j] > thresh) {
+// COCO class ID 16 corresponds to "dog"
+int dog_id = 16;
+
+if (dets[i].prob[dog_id] > thresh) {
+    // process detection
+}
+
 ```
 
 ### Adjusting Confidence Threshold
