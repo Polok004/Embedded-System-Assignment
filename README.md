@@ -164,7 +164,7 @@ This project uses POSIX shared memory, which provides:
 For IPC to work correctly, both programs must use identical data structures. This is critical - any mismatch will cause data corruption or incorrect interpretation:
 
 **Detection Structure:**
-- `class_id`: The class of the detected object (0 for person in COCO dataset)
+- `class_id`: The class of the detected object (16 for dog in COCO dataset)
 - `confidence`: How confident the detection is (0.0 to 1.0)
 - `x, y`: Top-left corner coordinates of the bounding box
 - `w, h`: Width and height of the bounding box
